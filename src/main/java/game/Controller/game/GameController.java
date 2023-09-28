@@ -1,26 +1,34 @@
 package game.Controller.game;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import game.Controller.game.movement.TheShortestPath;
-import game.Model.*;
 import game.Enum.*;
+import game.Model.*;
 import game.View.components.Tile;
+import javafx.scene.layout.AnchorPane;
 
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
 public class GameController {
-    private int mapWidth;
-    private int mapHeight;
-    private MapDimension mapDimension;
+    public int mapWidth;
+    public int mapHeight;
+    public MapDimension mapDimension;
     public Tile[][] map;
-    private ArrayList<User> players = new ArrayList<>();
-    private ArrayList<Civilization> civilizations;
-    private int time;
-    private int turn;
-    private Civilization currentCivilization;
-
+    public Terrain[][] terrains = new Terrain[mapHeight][mapWidth] ;
+    public ArrayList<User> players = new ArrayList<>();
+    public ArrayList<Civilization> civilizations;
+    public int time;
+    public int turn;
+    public Civilization currentCivilization;
     private static GameController instance;
+
+
 
     public static GameController getInstance() {
         if (instance == null) instance = new GameController();
@@ -103,6 +111,7 @@ public class GameController {
         CivilizationController.updateFogOfWar(currentCivilization , map , mapWidth , mapHeight);
         TheShortestPath.run();
         MapController.setBackgrounds(map);
+        createTerrainsFromMap();
     }
 
     private void setStartingRelations() {
@@ -116,13 +125,12 @@ public class GameController {
     }
 
     private static MapDimension chooseRandomMap() {
-        Random rand = new Random();
-        int randomNumber = rand.nextInt(15);
-        if (randomNumber % 3 == 0)
+        int players = GameController.getInstance().getPlayers().size();
+        if (players <= 3)
             return MapDimension.SMALL;
-        if (randomNumber % 4 == 0)
-            return MapDimension.LARGE;
-        return MapDimension.STANDARD;
+        if (players <= 5)
+            return MapDimension.STANDARD;
+        return MapDimension.LARGE;
     }
 
     public void run() {
@@ -163,7 +171,7 @@ public class GameController {
         this.turn = turn;
     }
 
-    public void nextTurn(GameController gameController) {
+    public void nextTurn(GameController gameController, AnchorPane game) {
         int index = gameController.getCivilizations().indexOf(gameController.getCurrentCivilization());
         if (index == gameController.getCivilizations().size() - 1) {
             gameController.setTurn(gameController.getTurn() + 1);
@@ -173,7 +181,83 @@ public class GameController {
             gameController.setCurrentCivilization(gameController.getCivilizations().get(index + 1));
         SelectController.selectedUnit = null;
         SelectController.selectedCity = null;
-//        MapController.setMapCenter(gameController.getCurrentCivilization().getUnits().get(0).getLocation());
+        MapController.setMapCenter(gameController.getCurrentCivilization().getUnits().get(0).getLocation() , game);
         CivilizationController.updateCivilizationElements(gameController);
+        CivilizationController.updateFogOfWar(currentCivilization , map , mapWidth , mapHeight);
+        MapController.setBackgrounds(map);
+    }
+
+    // save stuff
+    public void saveData (GameController gameController , String saveName){
+        Thread thread = new Thread(() -> {
+            try {
+                GameControllerDecoy gameControllerDecoy = new GameControllerDecoy(gameController);
+                FileWriter fileWriter = new FileWriter("./src/main/resources/game/database/games/"+saveName+".json");
+                fileWriter.write(new Gson().toJson(gameControllerDecoy));
+                fileWriter.close();
+            }
+            catch (IOException e) {
+                e.printStackTrace();
+            }
+        }) ;
+        thread.start();
+    }
+
+    public void loadGame (String name){
+        try {
+            String json = new String(Files.readAllBytes(Paths.get("./src/main/resources/game/database/games/"+name+".json")));
+            GameControllerDecoy gameControllerDecoy = new Gson().fromJson(json , new TypeToken<GameControllerDecoy>(){}.getType());
+            deepCopy(gameControllerDecoy);
+        }
+        catch (IOException e){e.printStackTrace();}
+    }
+
+    public MapDimension getMapDimension() {
+        return mapDimension;
+    }
+
+    public void deepCopy (GameControllerDecoy gameController){
+        this.mapDimension = gameController.getMapDimension() ;
+        this.mapWidth = gameController.getMapWidth() ;
+        this.mapHeight = gameController.getMapHeight();
+        this.players = gameController.getPlayers() ;
+        this.civilizations = gameController.getCivilizations() ;
+        this.time = gameController.getTime() ;
+        this.turn = gameController.getTurn() ;
+        this.currentCivilization = gameController.getCurrentCivilization();
+        this.terrains = gameController.getTerrains() ;
+        loadTilesFromTerrains();
+    }
+
+    public Civilization getCivilizationByName (String name){
+        for (Civilization civilization : civilizations) {
+            if (civilization.getName().equals(name))
+                return civilization;
+        }
+        return null ;
+    }
+
+    private void createTerrainsFromMap (){
+        terrains = new Terrain[mapHeight][mapWidth] ;
+        for (int row=0 ; row<mapHeight ; row++){
+            for (int col=0 ; col<mapWidth ; col++)
+                terrains[row][col] = map[row][col].getTerrain() ;
+        }
+    }
+
+
+    private void loadTilesFromTerrains (){
+        this.map = new Tile[mapHeight][mapWidth];
+        for (int y = 0; y < mapHeight; y++) {
+            for (int x = 0; x < mapWidth; x++)
+                map[y][x] = TileController.createTile(terrains[y][x] , x , y);
+        }
+        CivilizationController.updateFogOfWar(currentCivilization , map , mapWidth , mapHeight);
+        TheShortestPath.run();
+        MapController.setBackgrounds(map);
+    }
+
+    public Terrain[][] getTerrains() {
+        return terrains;
     }
 }

@@ -4,14 +4,9 @@ import game.Controller.game.LogAndNotification.NotificationController;
 import game.Model.*;
 import game.Enum.TypeOfUnit;
 import game.Enum.UnitStatus;
-import game.Enum.TypeOfTerrain;
 import game.View.components.Tile;
-
-import java.util.ArrayList;
-import java.util.regex.Matcher;
-
-
-import static game.Controller.game.SelectController.selectedCity;
+import game.View.controller.CityPanelController;
+import javafx.scene.control.Alert;
 
 public class CityController {
 
@@ -28,62 +23,6 @@ public class CityController {
             out.append(add).append("\n");
         }
         return out.toString();
-    }
-
-    public static ArrayList<Terrain> getAvailableTilesToBuy(City selectedCity , final Tile[][] map , int mapWidth , int mapHeight){
-        ArrayList<Terrain> tileAvailable = new ArrayList<>();
-        ArrayList<Terrain> allCivilizationOwnedTiles = new ArrayList<>();
-        for (City city : selectedCity.getOwnership().getCities())
-            allCivilizationOwnedTiles.addAll(city.getTerrains());
-
-        for (Terrain terrain : selectedCity.getTerrains()) {
-            ArrayList<Terrain> neighbours = CivilizationController.getNeighbourTerrainsByRadius1(terrain.getLocation() , map , mapWidth , mapHeight) ;
-            for (Terrain neighbour : neighbours) {
-                if (!tileAvailable.contains(neighbour)
-                    && !allCivilizationOwnedTiles.contains(neighbour)
-                    && neighbour.getTypeOfTerrain()!= TypeOfTerrain.OCEAN)
-                    tileAvailable.add(neighbour);
-            }
-        }
-        return tileAvailable ;
-    }
-
-    public static String showTilesAvailable(final Tile[][] map , int mapWidth , int mapHeight){
-        StringBuilder out = new StringBuilder("available tiles : \n");
-        if (!isCitySelected())
-            return "select a city first" ;
-        ArrayList<Terrain> tileAvailable = getAvailableTilesToBuy(selectedCity , map , mapWidth , mapHeight) ;
-        for (Terrain terrain : tileAvailable) {
-            String add = terrain.getTypeOfTerrain() + " : "
-                    + terrain.getLocation().getX() + " , "
-                    + terrain.getLocation().getY() + " --> "
-                    + terrain.getPrice();
-            out.append(add).append("\n") ;
-        }
-        return out.toString();
-    }
-
-    public static String buyTile (Matcher matcher , final Tile[][] map , int mapWidth , int mapHeight, Civilization civilization){
-        int x = Integer.parseInt(matcher.group("X"));
-        int y = Integer.parseInt(matcher.group("Y"));
-        if (!isCitySelected())
-            return "select a city first" ;
-        if (!(x>=0 && x<mapWidth && y>=0 && y<mapHeight))
-            return "invalid tile location" ;
-
-        ArrayList<Terrain> availableTerrains = getAvailableTilesToBuy(selectedCity , map , mapWidth , mapHeight);
-        for (Terrain availableTerrain : availableTerrains) {
-            if (availableTerrain.getLocation().getY()==y
-             && availableTerrain.getLocation().getX()==x){
-                if (civilization.getGold() < availableTerrain.getPrice())
-                    return "you don't have enough gold to buy this tile" ;
-                else {
-                    civilization.setGold(civilization.getGold() - availableTerrain.getPrice());
-                    return addTileToCity(selectedCity , availableTerrain);
-                }
-            }
-        }
-        return "you can't buy this tile" ;
     }
 
     public static String addTileToCity (City city , Terrain terrain){
@@ -108,16 +47,26 @@ public class CityController {
         else
             turn = typeOfUnit.getCost() / city.getProduction();
 
-        if (UnitController.anotherUnitIsInCenter(gameController, city))
-            return typeOfUnit + " wants to be created. Please move the unit which is in city center first!";
-
+        if (UnitController.anotherUnitIsInCenter(gameController, city)) {
+//            return typeOfUnit + " wants to be created. Please move the unit which is in city center first!";
+            CityPanelController.showError(typeOfUnit + " wants to be created. Please move the unit which is in city center first!");
+            return null;
+        }
         Unit newUnit = new Unit(typeOfUnit, UnitStatus.ACTIVE, location, typeOfUnit.getHp(), currentCivilization, turn);
         currentCivilization.addUnit(newUnit);
         city.getWantedUnits().remove(typeOfUnit);
         city.setProduction(city.getProduction() - typeOfUnit.getCost());
         NotificationController.logUnitCreated(typeOfUnit , currentCivilization);
+        setUnitPic();
+
+        Tile tile = TileController.getTileByTerrain(SelectController.selectedCity.getTerrains().get(0));
+        tile.updateUnitBackground();
         return typeOfUnit + " has been created successfully in location ( "
                 + location.getX() + " , " + location.getY() + " ) !";
+    }
+
+    private static void setUnitPic() {
+
     }
 
     public static String showUnemployedCitizens(City city) {
@@ -145,5 +94,23 @@ public class CityController {
                 return city;
         }
         return null;
+    }
+
+    //////////////////////////////////////
+
+    public static void checkCityCenter(Tile tile) {
+        Terrain terrain = tile.getTerrain();
+        City city = getCityByTerrain(GameController.getInstance().getCurrentCivilization(), terrain);
+        assert city != null;
+        if (terrain.equals(city.getTerrains().get(0))) {
+            SelectController.selectedCity = city;
+            showConfirm("City selected successfully!");
+        }
+    }
+
+    public static void showConfirm(String message) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setContentText(message);
+        alert.show();
     }
 }

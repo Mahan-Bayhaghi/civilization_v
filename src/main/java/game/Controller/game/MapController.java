@@ -54,10 +54,8 @@ public class MapController {
         }
         return true;
     }
-
     /**
      * a function to generate type of terrain foreach cell of map based on it's area
-     *
      * @param location location of terrain
      * @return type of terrain that is valid for this location
      */
@@ -109,7 +107,6 @@ public class MapController {
 
     /**
      * a function to generate random resources based on it's type of terrain and also terrain feature (if valid)
-     *
      * @param typeOfTerrain type of the terrain
      * @return an array list of resources int this terrain
      */
@@ -285,8 +282,8 @@ public class MapController {
                 map[y][x] = TileController.createTile(
                          new Terrain(
                                  typeOfTerrainUsed , typeOfTerrainFeatureUsed , resources ,
-                                 new Location(x , y)
-                         ), x , y
+                                 new Location(x  , y)
+                         ), x   , y - 1
                 );
             }
         }
